@@ -8,30 +8,112 @@ using namespace std;
 #include <stdlib.h>
 #include <stdlib.h>
 #include <GL/glut.h>
+
 #define WIDTH   1024
 #define HEIGHT  1024
-const int g_TFa = 25;
-const int g_TFb = 255;
+
+const int g_TFa = 2; // min alpha
+const int g_TFb = 255; // max alpha
+
 GLubyte MyTexture[HEIGHT][WIDTH][3]; // 3: rgb
+
+int prevMouseX = 0;
+int prevMouseY = 0;
+float cameraAngleX = 0.0f; // ì‹œì ì˜ ì¢Œìš° ê°ë„
+float cameraAngleY = 0.0f; // ì‹œì ì˜ ìœ„ì•„ë˜ ê°ë„
+float zoomLevel = 1.0f; // ì´ˆê¸° í™•ëŒ€ ë° ì¶•ì†Œ ë ˆë²¨
+// ì¹´ë©”ë¼ ìœ„ì¹˜
+float cameraX = 0.0f;
+float cameraY = 0.0f;
+
+
+// ì´ë™ ì†ë„
+float cameraSpeed = 0.1f;
+float cameraAngle = 0.0f;
+float cameraAngleSpeed = 1.0f;
+
+
 struct voxel {
     float r, g, b, a;
-};
+}; // new struct voxel = r,g,b,a(density)ì˜ ê°’ì„ ê°€ì§
 
-voxel volume[256][256][256];
-float vol[256][256][256]; // [z][y][x]
-float AlphaTable[256];
-float ColorTable[256][3];
-float sumTable[801];
+voxel volume[256][256][256]; // ë°ì´í„°ë¥¼ ì €ì¥ë°›ëŠ” volume
+float AlphaTable[256]; // Alpha ë¸”ëœë”©ì„ ìœ„í•œ AlphaTable
 
-float* SumTable = nullptr;
+void handleKeypress(unsigned char key, int x, int y) {
+    switch (key)
+    {
+    case '+': // '+' í‚¤ë¥¼ ëˆ„ë¥¼ ê²½ìš° í™•ëŒ€
+        zoomLevel -= 0.1f;
+        glutPostRedisplay();
+        break;
+    case '-': // '-' í‚¤ë¥¼ ëˆ„ë¥¼ ê²½ìš° ì¶•ì†Œ
+        zoomLevel += 0.1f;
+        if (zoomLevel < 0.1f) // ìµœì†Œ ì¶•ì†Œ ë ˆë²¨ ì„¤ì •
+            zoomLevel = 0.1f;
+        glutPostRedisplay();
+        break;
+    case 'u':
+        cameraAngle += cameraAngleSpeed; // ìœ„ë¡œ íšŒì „
+        break;
+    case 'd':
+        cameraAngle -= cameraAngleSpeed; // ì•„ë˜ë¡œ íšŒì „
+        break;
+    }
 
-float acolor[3] = { 0.0,0.5,0.5 };
-float bcolor[3] = { 0.5,0.4,0.6 };
-float ccolor[3] = { 0.9,0.0,0.0 };
-float dcolor[3] = { 0.0,0.9,0.0 };
+}
+
+void handleSpecialKeypress(int key, int x, int y) {
+    switch (key) {
+    case GLUT_KEY_UP:
+        cameraY += cameraSpeed; // ìœ„ë¡œ ì´ë™
+        break;
+    case GLUT_KEY_DOWN:
+        cameraY -= cameraSpeed; // ì•„ë˜ë¡œ ì´ë™
+        break;
+    case GLUT_KEY_LEFT:
+        cameraX -= cameraSpeed; // ì™¼ìª½ìœ¼ë¡œ ì´ë™
+        break;
+    case GLUT_KEY_RIGHT:
+        cameraX += cameraSpeed; // ì˜¤ë¥¸ìª½ìœ¼ë¡œ ì´ë™
+        break;
+    }
+
+    glutPostRedisplay(); // í™”ë©´ ê°±ì‹ 
+}
+
+void handleMouseDrag(int x, int y)
+{
+    int dx = x - prevMouseX;
+    int dy = y - prevMouseY;
+
+    // ë§ˆìš°ìŠ¤ì˜ ë“œë˜ê·¸ ë°©í–¥ì— ë”°ë¼ ì‹œì  ê°ë„ ë³€ê²½
+    cameraAngleX += dx * 0.1f; // ì¢Œìš° ì´ë™ì— ë”°ë¥¸ ê°ë„ ë³€ê²½ ë¹„ìœ¨ ì¡°ì ˆ
+    cameraAngleY += dy * 0.1f; // ìƒí•˜ ì´ë™ì— ë”°ë¥¸ ê°ë„ ë³€ê²½ ë¹„ìœ¨ ì¡°ì ˆ
+
+    // ì‹œì ì„ ë³€ê²½í•œ í›„ ë‹¤ì‹œ ê·¸ë¦¬ë„ë¡ í™”ë©´ ê°±ì‹ 
+    glutPostRedisplay();
+
+    // ì´ì „ ë§ˆìš°ìŠ¤ ìœ„ì¹˜ ê°±ì‹ 
+    prevMouseX = x;
+    prevMouseY = y;
+}
+
+void handleMouseClick(int button, int state, int x, int y)
+{
+    if (button == GLUT_LEFT_BUTTON)
+    {
+        if (state == GLUT_DOWN)
+        {
+            // ë§ˆìš°ìŠ¤ í´ë¦­ ì‹œì‘ ì‹œ í˜„ì¬ ë§ˆìš°ìŠ¤ ìœ„ì¹˜ ì €ì¥
+            prevMouseX = x;
+            prevMouseY = y;
+        }
+    }
+}
+
 void MakeAlphaTable(int a, int b) {
     for (int i = 0; i < 256; i++) {
-
         if (i < a) {
             AlphaTable[i] = 0;
         }
@@ -41,84 +123,22 @@ void MakeAlphaTable(int a, int b) {
         else if (i >= b) {
             AlphaTable[i] = 1;
         }
-
-        // ¿ø·¡ ÇÔ¼ö ºĞ¸®. ÇÏÁö¸¸ ¿©±â¼­ ÇÑ´Ù.
-        SumTable = &(sumTable[1]); // À½¼ö -1 index »ç¿ë °¡´É
-        SumTable[-1] = 0.0f;
-        for (int j = i; j <= i; j++) {
-            SumTable[j] = SumTable[j - 1] + AlphaTable[j];
-        }
     }
-}
-void MakeColorTable(int a, int b, float acolor[3], float bcolor[3], float ccolor[3], float dcolor[3]) {
-    for (int i = 0; i < 256; i++) {
-        for (int j = 0; j < 3; j++) {
-
-            // ÇöÀç °­µµ¿¡ ÇØ´çÇÏ´Â º¸Å¬ °ª °áÁ¤
-            //int voxelValue = static_cast<int>((i - a) / (float)(b - a) * 255.0);
-            //// °ªÀ» [0, 255] ¹üÀ§·Î Å¬·¥ÇÎ
-            //if (voxelValue < 0) voxelValue = 0;
-            //if (voxelValue > 255) voxelValue = 255;
-
-            //// º¸Å¬ µ¥ÀÌÅÍ¿¡¼­ RGB °ªÀ» »ç¿ë
-            //ColorTable[i][0] = volume[voxelValue][0][0].r ;  // Red
-            //ColorTable[i][1] = volume[voxelValue][0][0].g ;  // Green
-            //ColorTable[i][2] = volume[voxelValue][0][0].b ;  // Blue
-            //// µğ¹ö±ëÀ» À§ÇÑ Ãâ·Â
-            //std::cout << "ColorTable[" << i << "]: "
-            //   << ColorTable[i][0] << ", "
-            //   << ColorTable[i][1] << ", "
-            //   << ColorTable[i][2] << ", voxelValue: " << voxelValue << std::endl;
-            float t = (float)(i - a) / (b - a);
-
-            if (i < a) {
-                ColorTable[i][j] = (1 - t) * acolor[j] + t * bcolor[j];
-            }
-            else if (i >= a && i < b) {
-                ColorTable[i][j] = (1 - t) * bcolor[j] + t * ccolor[j];
-
-
-            }
-            else if (i >= b) {
-                ColorTable[i][j] = (1 - t) * ccolor[j] + t * dcolor[j];
-
-
-            }
-        }
-    }
-    //float ColorTable[256]; // 0~1\
- }
-}
-
-bool IsTransparent(int m, int M) { // m==0 ÀÎ °æ¿ì ¾îÂ¿?
-   //if (m == 0)
-   //   return sumTable[M] == 0;
-   //else
-    return SumTable[M] == SumTable[m - 1]; // -1µµ ¾ÈÀüÇÔ
-    for (int i = m; i <= M; i++) {//sumtable ¿¡¼­ m~M »çÀÌ °ªº¯ÇÏ´ÂÁö ºñ±³
-        if (AlphaTable[i] != 0)
-            return false; // ºÒÅõ¸í
-    }
-    return true;
 }
 
 class vec {
 public:
-
     float m[3];
-
     vec() {
         for (int i = 0; i < 3; i++) {
             m[i] = 0;
         }
     }
-
     vec(float a, float b, float c) {
 
         m[0] = a;
         m[1] = b;
         m[2] = c;
-
 
     }
     vec vec_sub(vec a) {
@@ -133,28 +153,18 @@ public:
     void vec_print() {
         for (int i = 0; i < 3; i++) {
             printf("(%f )", m[i]);
-
         }
         printf("\n");
-
     }
-
-    vec vec_norm() {//º¤ÅÍ Á¤±ÔÈ­
-
+    vec vec_norm() {//ë²¡í„° ì •ê·œí™”
         float len = sqrtf(m[0] * m[0] + m[1] * m[1] + m[2] * m[2]);
-
-        //¿¹¿Ü Ã³¸®
+        //ì˜ˆì™¸ ì²˜ë¦¬
         if (len == 0)
             len = 1;
         for (int i = 0; i < 3; i++) {
-
             m[i] = m[i] / len;
         }
-
-
-
         return *this;
-
     }
     vec operator+(const vec& other) const {
         return vec(m[0] + other.m[0], m[1] + other.m[1], m[2] + other.m[2]);
@@ -177,13 +187,8 @@ public:
     float dot(vec x) {
         return m[0] * x.m[0] + m[1] * x.m[1] + m[2] * x.m[2];
     }
-
-
-
-
-
-    vec vec_cross(vec a) { // c = a * b  ¿ÜÀû
-       //cross product°¡ ¾È³ª¿À´Â °æ¿ì -> µÎ º¤ÅÍ°¡ ºÙ¾îÀÖ´Â °æ¿ì ´äÀÌ ¹«ÇÑÈ÷ ¸¹¾ÆÁü
+    vec vec_cross(vec a) { // c = a * b  ì™¸ì 
+       //cross productê°€ ì•ˆë‚˜ì˜¤ëŠ” ê²½ìš° -> ë‘ ë²¡í„°ê°€ ë¶™ì–´ìˆëŠ” ê²½ìš° ë‹µì´ ë¬´í•œíˆ ë§ì•„ì§
         vec result;
         result.m[0] = m[1] * a.m[2] - m[2] * a.m[1];
         result.m[1] = m[2] * a.m[0] - m[0] * a.m[2];
@@ -191,15 +196,14 @@ public:
 
         return result;
     }
-
 };
 //float eye[3] = { 0,160,128 };
 //float at[3] = { 128,128,112.5 };
 //float dir[3];
 //float up[3] = { 0,-1,0 };
 //
-//float u[3], v[3], w[3]; // Ä«¸Ş¶ó ±âÁØÀÇ  x,y,zÃà ¹æÇâ
-vec eye(0, 200, 256);
+//float u[3], v[3], w[3]; // ì¹´ë©”ë¼ ê¸°ì¤€ì˜  x,y,zì¶• ë°©í–¥
+vec eye(100, 128, 300);
 vec at(128, 128, 128);
 vec dir;
 vec up(0, -1, 0);
@@ -210,11 +214,11 @@ vec rayStart;
 void vec_print(float x[3]) {
     printf("(%f, %f, %f)\n", x[0], x[1], x[2]);
 }
-// (0,0,0)~from ±îÁöÀÇ º¤ÅÍ¸¦ normalize ÇØ¼­ to ¿¡ ÀúÀå
+// (0,0,0)~from ê¹Œì§€ì˜ ë²¡í„°ë¥¼ normalize í•´ì„œ to ì— ì €ì¥
 void vec_norm(float from[3], float to[3]) {
     float len = sqrtf(from[0] * from[0] + from[1] * from[1] + from[2] * from[2]);
     if (len == 0)
-        len = 1;// ¿¹¿ÜÀûÀ¸·Î ±×³É º¹»çÇØÁÜ
+        len = 1;// ì˜ˆì™¸ì ìœ¼ë¡œ ê·¸ëƒ¥ ë³µì‚¬í•´ì¤Œ
     to[0] = from[0] / len;
     to[1] = from[1] / len;
     to[2] = from[2] / len;
@@ -230,7 +234,7 @@ void vec_cross(float c[3], float a[3], float b[3]) { // c = a * b
     c[2] = a[0] * b[1] - a[1] * b[0];
 }
 
-void samplingRGB(float x, float y, float z, float* color) {
+void samplingRGB(float x, float y, float z, float* color) { // ì¼ì¢…ì˜ colorTable ì—­í• 
     if (x >= 255 || y >= 255 || z >= 255 || x < 0 || y < 0 || z < 0) {
         color[0] = color[1] = color[2] = 0;
         return;
@@ -242,7 +246,7 @@ void samplingRGB(float x, float y, float z, float* color) {
     int iz = (int)z;
     float wz = z - iz;
 
-    for (int i = 0; i < 3; i++) { // °¢ »ö»ó Ã¤³Î¿¡ ´ëÇØ º°µµ·Î º¸°£
+    for (int i = 0; i < 3; i++) { // ê° ìƒ‰ìƒ ì±„ë„ì— ëŒ€í•´ ë³„ë„ë¡œ ë³´ê°„
         float a = (i == 0 ? volume[iz][iy][ix].r : (i == 1 ? volume[iz][iy][ix].g : volume[iz][iy][ix].b));
         float b = (i == 0 ? volume[iz][iy][ix + 1].r : (i == 1 ? volume[iz][iy][ix + 1].g : volume[iz][iy][ix + 1].b));
         float c = (i == 0 ? volume[iz][iy + 1][ix].r : (i == 1 ? volume[iz][iy + 1][ix].g : volume[iz][iy + 1][ix].b));
@@ -261,7 +265,7 @@ void samplingRGB(float x, float y, float z, float* color) {
 
 
 float sampling(float x, float y, float z) { // x=3.7 , ix = 3
-   // ÈùÆ®, ÁÂÇ¥ ¹ş¾î³ª¼­ ¸Ş¸ğ¸® ÂüÁ¶ ¿À·ù ÇØ°áÇÒ °Í.
+   // íŒíŠ¸, ì¢Œí‘œ ë²—ì–´ë‚˜ì„œ ë©”ëª¨ë¦¬ ì°¸ì¡° ì˜¤ë¥˜ í•´ê²°í•  ê²ƒ.
     if (x >= 255 || y >= 255 || z >= 255 ||
         x < 0 || y < 0 || z < 0)
         return 0;
@@ -273,14 +277,14 @@ float sampling(float x, float y, float z) { // x=3.7 , ix = 3
     float wz = z - iz;
 
 
-    float a = vol[iz][iy][ix];
-    float b = vol[iz][iy][ix + 1];
-    float c = vol[iz][iy + 1][ix];
-    float d = vol[iz][iy + 1][ix + 1];
-    float e = vol[iz + 1][iy][ix];
-    float f = vol[iz + 1][iy][ix + 1];
-    float g = vol[iz + 1][iy + 1][ix];
-    float h = vol[iz + 1][iy + 1][ix + 1];
+    float a = volume[iz][iy][ix].a;
+    float b = volume[iz][iy][ix + 1].a;
+    float c = volume[iz][iy + 1][ix].a;
+    float d = volume[iz][iy + 1][ix + 1].a;
+    float e = volume[iz + 1][iy][ix].a;
+    float f = volume[iz + 1][iy][ix + 1].a;
+    float g = volume[iz + 1][iy + 1][ix].a;
+    float h = volume[iz + 1][iy + 1][ix + 1].a;
 
     float res = a * (1 - wx) * (1 - wy) * (1 - wz) + b * (wx) * (1 - wy) * (1 - wz) +
         c * (1 - wx) * wy * (1 - wz) + d * wx * wy * (1 - wz) + e * (1 - wx) * (1 - wy) * wz
@@ -288,7 +292,8 @@ float sampling(float x, float y, float z) { // x=3.7 , ix = 3
 
 
     //if (res > 255) res = 255;
-    return res ; // 77.285
+    //ë°˜í™˜ ê°’ì— ë”°ë¼ ì„ ëª…ë„ ì¡°ì ˆ
+    return res / 5; // 77.285
 
 //return vol[iz][iy][ix];
 
@@ -298,48 +303,26 @@ float sampling(float x, float y, float z) { // x=3.7 , ix = 3
 //return res; // 77.285
 }
 
-float maxr = 0;
-float maxg = 0;
-float maxb = 0;
-float maxa = 0;
-float maxvol = 0;
-void FillMyTexture() {
-    // FILE* fp = fopen("256x256x256_0.den", "rb");
+void FileLoad() {
     FILE* fp = fopen("rgba_data.den", "rb");
     fread(volume, sizeof(voxel), 256 * 256 * 256, fp);
     fclose(fp);
-    for (int iy = 0; iy < 256; iy++) {
-        for (int ix = 0; ix < 256; ix++) {
-            for (int iz = 0; iz < 256; iz++) {
-                vol[iy][ix][iz] = volume[iy][ix][iz].a * 10;
-                //ÃßÈÄ ÄÚµå ¼öÁ¤
-                maxr = __max(maxr, volume[iy][ix][iz].r);
-                maxg = __max(maxg, volume[iy][ix][iz].g);
-                maxb = __max(maxb, volume[iy][ix][iz].b);
-                maxa = __max(maxa, volume[iy][ix][iz].a);
-                maxvol = __max(maxvol, vol[iy][ix][iz]);
+}
 
-            }
-        }
-    }
-    printf("fun get_rgba_on_grid max r:!! %f !! \n", maxr);
-    printf("fun get_rgba_on_grid max g:!! %f !! \n", maxg);
-    printf("fun get_rgba_on_grid max b:!! %f !! \n", maxb);
-    printf("fun get_rgba_on_grid max a:!! %f !! \n", maxa);
-    printf("fun vol max a:!! %f !! \n", maxvol);
+void FillMyTexture() {
 
+    FileLoad();
     // MPR: MultiPlanar Reformation
     // MIP : Maximum Intensity Projection
-    float max = 0;
 
     for (int iy = 0; iy < HEIGHT; iy++) {
         for (int ix = 0; ix < WIDTH; ix++) {
-            int dx = (ix - 512)/2; // Áß½ÉÁ¡ ±âÁØÀ¸·Î ¿µ»ó uÃà ¹æÇâÀ¸·Î ¸îÄ­ ¿òÁ÷¿´³ª
-            int dy = (iy - 512)/2; // Áß½ÉÁ¡ ±âÁØÀ¸·Î ¿µ»ó vÃà ¹æÇâÀ¸·Î ¸îÄ­ ¿òÁ÷¿´³ª
+            int dx = (ix - 512) / 2; // ì¤‘ì‹¬ì  ê¸°ì¤€ìœ¼ë¡œ ì˜ìƒ uì¶• ë°©í–¥ìœ¼ë¡œ ëª‡ì¹¸ ì›€ì§ì˜€ë‚˜
+            int dy = (iy - 512) / 2; // ì¤‘ì‹¬ì  ê¸°ì¤€ìœ¼ë¡œ ì˜ìƒ vì¶• ë°©í–¥ìœ¼ë¡œ ëª‡ì¹¸ ì›€ì§ì˜€ë‚˜
 
             //vec3 rs = eye + u * dx + v * dy;
             rayStart = eye + u * dx + v * dy;
-            int maxv = 0;
+            
             float alphasum = 0;
             float colorsum[3];
             for (int t = 0; t < 3; t++) {
@@ -358,7 +341,6 @@ void FillMyTexture() {
 
                 float color[3];
                 samplingRGB(s.m[0], s.m[1], s.m[2], color);
-                max = __max(max, Intensity);
 
                 float alpha = AlphaTable[Intensity];
                 if (alpha == 0) {
@@ -373,26 +355,21 @@ void FillMyTexture() {
                 N.m[2] = dz;
                 N.vec_norm();
                 // alpha blending
-
-                //for (int i = 0; i < 3; i++) {
-                //    color[i] = ColorTable[Intensity][i]; // ColorTable¿¡´Â r,g,b°¡ µé¾îÀÖ´Ù. color[3] = {0.4, 0.2, 0.1}; // ´©¸£½º¸§ ÁÖÈ²»ö
-                //}
-                float Ia = 0.3, Id = 0.6, Is = 0.3; // °íÁ¤, Ia[3] = {0.3 , 0.3, 0.3}; // r,g,bµ¿ÀÏ ´À³¦
+                // calc light
+                float Ia = 0.3, Id = 0.6, Is = 0.3; // ê³ ì •, Ia[3] = {0.3 , 0.3, 0.3}; // r,g,bë™ì¼ ëŠë‚Œ
                 float Ka[3], Kd[3];
                 for (int i = 0; i < 3; i++) {
-
                     Ka[i] = color[i];
                     Kd[i] = color[i];
-
                 }
                 float Ks = 1.0;
-                vec L(w); // ±¤ºÎ Á¶¸í ¸ğµ¨(Æí¸®)
+                vec L(w); // ê´‘ë¶€ ì¡°ëª… ëª¨ë¸(í¸ë¦¬)
                 L = L * -1.0;
 
                 float NL = N.dot(L);
                 if (NL < 0)
                     NL = -NL;
-                vec H = eye; // ±¤ºÎ¸ğµ¨ÀÇ °æ¿ì¸¸ °¡´É ¿ø·¡´Â (L + eye).normalize();
+                vec H = eye; // ê´‘ë¶€ëª¨ë¸ì˜ ê²½ìš°ë§Œ ê°€ëŠ¥ ì›ë˜ëŠ” (L + eye).normalize();
                 float NH = N.dot(H); // RV
                 if (NH < 0)
                     NH = -NH;
@@ -400,7 +377,7 @@ void FillMyTexture() {
                 R.vec_norm();
                 float RV = fabs(R.dot(w));
                 const float po = 10;
-                // K´Â ¹°Ã¼»ö»ó, ±×·¯¹Ç·Î color[3]À» »ç¿ë.
+                // KëŠ” ë¬¼ì²´ìƒ‰ìƒ, ê·¸ëŸ¬ë¯€ë¡œ color[3]ì„ ì‚¬ìš©.
                 float I[3];
                 float e[3];
                 for (int i = 0; i < 3; i++) {
@@ -408,12 +385,11 @@ void FillMyTexture() {
                     I[i] = Ia * Ka[i] + Id * Kd[i] * NL + Is * Ks * pow(RV, po);
                     e[i] = I[i] * alpha;
                     colorsum[i] = colorsum[i] + e[i] * (1 - alphasum);
-
                 }
 
 
                 alphasum = alphasum + alpha * (1 - alphasum);
-                // ¼ÓµµÇâ»ó: È­ÁúÀ» ÀúÇÏ¾øÀÌ (ÃÖ¼ÒÇÑÀ¸·ÎÇÏ¸é¼­) ¿¬»êÀ» ÁÙÀÌ´Â ¹æ¹ı ¿¬±¸
+                // ì†ë„í–¥ìƒ: í™”ì§ˆì„ ì €í•˜ì—†ì´ (ìµœì†Œí•œìœ¼ë¡œí•˜ë©´ì„œ) ì—°ì‚°ì„ ì¤„ì´ëŠ” ë°©ë²• ì—°êµ¬
                 if (alphasum > 0.99) {
                     break;
                 }
@@ -421,23 +397,16 @@ void FillMyTexture() {
             }
 
             for (int i = 0; i < 3; i++) {
-
                 if (colorsum[i] > 1)
                     colorsum[i] = 1;
             }
 
-            //GLubyte Intensity = vol[(int)vz][(int)vy][(int)vx]; // ((s + t) % 2) * 255;    //0´Â Èæ»ö, 255´Â ¹é»ö
-            //maxv = __max(maxv, Intensity);
-
-         //Intensity = rand()%255;
-            MyTexture[iy][ix][0] = colorsum[0] * 255.0;         //Red °ª¿¡ ÇÒ´ç
-            MyTexture[iy][ix][1] = colorsum[1] * 255.0;;             //Green °ª¿¡ ÇÒ´ç
-            MyTexture[iy][ix][2] = colorsum[2] * 255.0;
-            //Blue °ª¿¡ ÇÒ´ç
+            MyTexture[iy][ix][0] = colorsum[0] * 255.0; //Red ê°’ì— í• ë‹¹
+            MyTexture[iy][ix][1] = colorsum[1] * 255.0; //Green ê°’ì— í• ë‹¹
+            MyTexture[iy][ix][2] = colorsum[2] * 255.0; //Blue ê°’ì— í• ë‹¹
 
         }
     }
-    printf(" max sss : %f\n", max);
 }
 
 void MyInit() {
@@ -461,43 +430,62 @@ void MyDisplay() {
     glTexCoord2f(0.0, 0.0); glVertex3f(-1.0, 1.0, 0.0);
     glTexCoord2f(1.0, 0.0); glVertex3f(1.0, 1.0, 0.0);
     glTexCoord2f(1.0, 1.0); glVertex3f(1.0, -1.0, 0.0);
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(-20.0 * zoomLevel, 20.0 * zoomLevel, -20.0 * zoomLevel, 20.0 * zoomLevel, -500.0, 500.0);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glTranslatef(-cameraX, -cameraY, 0.0f);
+    gluLookAt(cameraX, cameraY, 1, cameraX, cameraY, 0, 0, 1, 0);
+    glRotatef(cameraAngle, 0.0f, 0.0f, 1.0f);
+    // ì‹œì  ë³€ê²½
+    //gluLookAt(0.0f, 0.0f, 5.0f,
+    //    0.0f, 0.0f, 0.0f,
+    //    0.0f, 1.0f, 0.0f);
+
+    // ì‹œì ì˜ ì¢Œìš° ê°ë„ ë³€ê²½
+    glRotatef(cameraAngleX, 0.0f, 1.0f, 0.0f);
+
+    // ì‹œì ì˜ ìœ„ì•„ë˜ ê°ë„ ë³€ê²½
+    glRotatef(cameraAngleY, 1.0f, 0.0f, 0.0f);
+
     glEnd();
     glutSwapBuffers();
 }
+
 int main(int argc, char** argv) {
     glutInit(&argc, argv);
+    glutInitWindowPosition(0, 0);
     glutInitWindowSize(1024, 1024);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
     glutCreateWindow("openGL Sample Program");
 
     dir = at.vec_sub(eye);
-    //vec_norm(dir, w);//dirÀ» w·Î ´ÜÀ§º¤ÅÍÈ­
+    //vec_norm(dir, w);//dirì„ wë¡œ ë‹¨ìœ„ë²¡í„°í™”
     w = dir.vec_norm();
 
-    //upº¤ÅÍ°¡ ÁÖ¾îÁ³À»¶§, w¹æÇâÀ¸·Î Á¤»ç¿µ(±×¸²ÀÚ)¸¦ ³»·Á¼­ ¸¸³ª´Â ¹æÇâÀÌ v[3]°¡ µÇµµ·Ï °è»êÇÏ¶ó
-    //v[3]°¡ ÁÖ¾îÁø´Ù¸é u[3]Àº ÀÚµ¿ÀûÀ¸·Î °áÁ¤
-    //½±°Ô Ç®±â À§ÇØ ¿ÜÀû È°¿ë(vec_cross)
-    //¿À¸¥¼Õ ¹ıÄ¢¿¡ ÀÇÇØ ¹æÇâÀÌ °áÁ¤
-    //up, w¸¦ ¿ÜÀû ½ÃÅ°¸é u Áï xÃà
-    //w, u¸¦ ¿ÜÀû ½ÃÅ°¸é v Áï yÃà => upº¤ÅÍÀÇ ¼ö¼±ÀÇ ¹ß
-    u = up.vec_cross(w); //xyzxyzxyzxyz  u´Â xÃà
+    //upë²¡í„°ê°€ ì£¼ì–´ì¡Œì„ë•Œ, wë°©í–¥ìœ¼ë¡œ ì •ì‚¬ì˜(ê·¸ë¦¼ì)ë¥¼ ë‚´ë ¤ì„œ ë§Œë‚˜ëŠ” ë°©í–¥ì´ v[3]ê°€ ë˜ë„ë¡ ê³„ì‚°í•˜ë¼
+    //v[3]ê°€ ì£¼ì–´ì§„ë‹¤ë©´ u[3]ì€ ìë™ì ìœ¼ë¡œ ê²°ì •
+    //ì‰½ê²Œ í’€ê¸° ìœ„í•´ ì™¸ì  í™œìš©(vec_cross)
+    //ì˜¤ë¥¸ì† ë²•ì¹™ì— ì˜í•´ ë°©í–¥ì´ ê²°ì •
+    //up, wë¥¼ ì™¸ì  ì‹œí‚¤ë©´ u ì¦‰ xì¶•
+    //w, uë¥¼ ì™¸ì  ì‹œí‚¤ë©´ v ì¦‰ yì¶• => upë²¡í„°ì˜ ìˆ˜ì„ ì˜ ë°œ
+    u = up.vec_cross(w); //xyzxyzxyzxyz  uëŠ” xì¶•
     u.vec_norm();
-    v = w.vec_cross(u);//¿ÜÀûÀ» ÀÌ¿ëÇØ y Ãà ±¸ÇÔ
+    v = w.vec_cross(u);//ì™¸ì ì„ ì´ìš©í•´ y ì¶• êµ¬í•¨
     v.vec_norm();
 
     printf("--uvw---\n");
-    u.vec_print(); // xÃà
-    v.vec_print(); // yÃà
-    w.vec_print(); // zÃà
-    MakeAlphaTable(g_TFa, g_TFb);//Åõ¸íµµ
-    //MakeColorTable(0, 255, acolor, bcolor, ccolor, dcolor);//»ö
-    float max = 0;
-    for (int i = 0; i < 255; i++) {
-        for (int j = 0; j < 3; j++) {
-            max = __max(max, ColorTable[i][j]);
-        }
-    }
-    printf("color max : %f\n", max);
+    u.vec_print(); // xì¶•
+    v.vec_print(); // yì¶•
+    w.vec_print(); // zì¶•
+    MakeAlphaTable(g_TFa, g_TFb);//íˆ¬ëª…ë„
+
+    glutKeyboardFunc(handleKeypress);
+    glutMouseFunc(handleMouseClick);
+    glutMotionFunc(handleMouseDrag);
+    glutSpecialFunc(handleSpecialKeypress); // ë°©í–¥í‚¤ ì…ë ¥ ì²˜ë¦¬ í•¨ìˆ˜ ë“±ë¡
 
     MyInit();
 
